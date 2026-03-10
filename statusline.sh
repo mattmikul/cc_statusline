@@ -10,6 +10,9 @@ home="$HOME"
 tilde="~"
 display_dir="${cwd/#$home/$tilde}"
 
+# Model
+model=$(echo "$input" | jq -r '.model.display_name // "?"')
+
 # Context window usage
 used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
 ctx_window=$(echo "$input" | jq -r '.context_window.context_window_size // 0')
@@ -54,4 +57,4 @@ if [ -f "$cache_file" ]; then
   [ -n "$quota_7d" ] && quota_7d="$(printf "%.0f" "$quota_7d")%"
 fi
 
-printf "%s  context:%s/%s  quota: %s of 5h, %s of 7d" "$display_dir" "$used_int" "$ctx_window_k" "$quota_5h" "$quota_7d"
+printf "%s  model:%s  context:%s%%/%s  quota: %s of 5h, %s of 7d" "$display_dir" "$model" "$used_int" "$ctx_window_k" "$quota_5h" "$quota_7d"

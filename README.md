@@ -14,7 +14,7 @@ Similar to what shows in `/usage`
 
 ## How it works
 
-The quota percentages are fetched from `https://api.anthropic.com/api/oauth/usage` using the OAuth token Claude Code stores in your macOS keychain. Results are cached for 60 seconds to avoid hammering the API.
+The quota percentages are fetched from `https://api.anthropic.com/api/oauth/usage` using the OAuth token Claude Code stores locally — the macOS Keychain on macOS, or `~/.claude/.credentials.json` on Linux. Results are cached for 60 seconds to avoid hammering the API.
 
 Note: this endpoint is undocumented and may change. Once Anthropic exposes quota data in the official statusLine JSON ([issue #27915](https://github.com/anthropics/claude-code/issues/27915)), this workaround can be removed.
 
@@ -27,12 +27,12 @@ Note: this endpoint is undocumented and may change. Once Anthropic exposes quota
 ```json
 "statusLine": {
   "type": "command",
-  "command": "bash /path/to/statusline.sh"
+  "command": "bash ~/code/cc_statusline/statusline.sh"
 }
 ```
 
 ## Requirements
 
-- macOS (uses `security` to read from Keychain)
-- `jq` and `curl` (both available by default on macOS)
+- macOS or Linux
+- `jq`, `curl`, and `python3`
 - Claude Code logged in via OAuth (not API key)

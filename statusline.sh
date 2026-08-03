@@ -24,6 +24,30 @@ else
   used_int="0"
 fi
 
+# Detect whether Claude Code is pointed at a local proxy (e.g. tiny-llm-proxy)
+# rather than Anthropic's API. ANTHROPIC_BASE_URL is inherited from the shell
+# env that launched Claude Code, since this script runs as its subprocess.
+base_url="${ANTHROPIC_BASE_URL:-}"
+is_local=0
+if [ -n "$base_url" ] && [[ "$base_url" != *"api.anthropic.com"* ]]; then
+  is_local=1
+fi
+
+if [ "$is_local" -eq 1 ]; then
+  # Anthropic quota is meaningless when talking to a local model - skip the
+  # lookup entirely and show where we're actually pointed instead. Claude
+  # Code's own model.display_name is just its client-side alias (e.g. "Sonnet
+  # 5") and doesn't reflect the real backend model, so ask the proxy directly.
+  remote_model=$(curl -sf --max-time 1 "$base_url/health" 2>/dev/null | jq -r '.model // empty' 2>/dev/null)
+
+  if [ -n "$remote_model" ]; then
+    printf "%s  \xf0\x9f\x8f\xa0 LOCAL:%s  model:%s  context:%s%%/%s" "$display_dir" "$base_url" "$remote_model" "$used_int" "$ctx_window_k"
+  else
+    printf "%s  \xf0\x9f\x8f\xa0 LOCAL:%s  context:%s%%/%s" "$display_dir" "$base_url" "$used_int" "$ctx_window_k"
+  fi
+  exit 0
+fi
+
 # Quota usage via undocumented OAuth endpoint
 # Token is read from macOS keychain; results cached for 60s to avoid hammering the API
 cache_file="/tmp/cc_quota_cache"

@@ -49,20 +49,30 @@ if [ "$is_local" -eq 1 ]; then
 fi
 
 # Quota usage via undocumented OAuth endpoint
-# Token is read from macOS keychain; results cached for 60s to avoid hammering the API
+# Token is read from macOS keychain (or ~/.claude/.credentials.json on Linux);
+# results cached for 60s to avoid hammering the API
 cache_file="/tmp/cc_quota_cache"
 quota_5h="--"; quota_7d="--"
 
 now=$(date +%s)
 if [ -f "$cache_file" ]; then
-  cache_age=$(( now - $(stat -f %m "$cache_file" 2>/dev/null || echo 0) ))
+  if [ "$(uname)" = "Darwin" ]; then
+    file_mtime=$(stat -f %m "$cache_file" 2>/dev/null || echo 0)
+  else
+    file_mtime=$(stat -c %Y "$cache_file" 2>/dev/null || echo 0)
+  fi
+  cache_age=$(( now - file_mtime ))
 else
   cache_age=9999
 fi
 
 if [ "$cache_age" -gt 60 ]; then
-  token=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null \
-    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['claudeAiOauth']['accessToken'])" 2>/dev/null)
+  if [ "$(uname)" = "Darwin" ]; then
+    token=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null \
+      | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['claudeAiOauth']['accessToken'])" 2>/dev/null)
+  else
+    token=$(python3 -c "import json; print(json.load(open('$HOME/.claude/.credentials.json'))['claudeAiOauth']['accessToken'])" 2>/dev/null)
+  fi
   if [ -n "$token" ]; then
     response=$(curl -sf --max-time 3 \
       -H "Authorization: Bearer $token" \

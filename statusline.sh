@@ -21,7 +21,13 @@ ctx_window_k=$(awk -v w="$ctx_window" 'BEGIN { printf "%dk", w/1000 }')
 if [ -n "$used_pct" ]; then
   used_int=$(printf "%.0f" "$used_pct")
 else
-  used_int="0"
+  # Try to calculate from used_tokens if available
+  used_tokens=$(echo "$input" | jq -r '.context_window.used_tokens // empty')
+  if [ -n "$used_tokens" ] && [ "$ctx_window" -gt 0 ] 2>/dev/null; then
+    used_int=$(awk -v used="$used_tokens" -v total="$ctx_window" 'BEGIN { printf "%.0f", (used/total)*100 }')
+  else
+    used_int="0"
+  fi
 fi
 
 # Detect whether Claude Code is pointed at a local proxy (e.g. tiny-llm-proxy)
@@ -39,11 +45,27 @@ if [ "$is_local" -eq 1 ]; then
   # Code's own model.display_name is just its client-side alias (e.g. "Sonnet
   # 5") and doesn't reflect the real backend model, so ask the proxy directly.
   remote_model=$(curl -sf --max-time 1 "$base_url/health" 2>/dev/null | jq -r '.model // empty' 2>/dev/null)
+  ctx_info=$(curl -sf --max-time 1 "$base_url/context_window" 2>/dev/null | jq -r '.' 2>/dev/null)
+
+  # Start with the default ctx_window_k from above as fallback
+  ctx_size_k="${ctx_window_k}"
+
+  if [ -n "$ctx_info" ]; then
+    ctx_size=$(echo "$ctx_info" | jq -r '.context_window_size // 0')
+    used_tokens=$(echo "$ctx_info" | jq -r '.used_tokens // 0')
+    if [ "$ctx_size" -gt 0 ] 2>/dev/null; then
+      ctx_size_k=$(awk -v w="$ctx_size" 'BEGIN { printf "%dk", w/1000 }')
+      # Calculate percentage from proxy's tracked usage
+      if [ "$used_tokens" -gt 0 ] 2>/dev/null; then
+        used_int=$(awk -v used="$used_tokens" -v total="$ctx_size" 'BEGIN { printf "%.0f", (used/total)*100 }')
+      fi
+    fi
+  fi
 
   if [ -n "$remote_model" ]; then
-    printf "%s  \xf0\x9f\x8f\xa0 LOCAL:%s  model:%s  context:%s%%/%s" "$display_dir" "$base_url" "$remote_model" "$used_int" "$ctx_window_k"
+    printf "%s  \xf0\x9f\x8f\xa0 %s  model:%s  context:%s%%/%s" "$display_dir" "$base_url" "$remote_model" "$used_int" "$ctx_size_k"
   else
-    printf "%s  \xf0\x9f\x8f\xa0 LOCAL:%s  context:%s%%/%s" "$display_dir" "$base_url" "$used_int" "$ctx_window_k"
+    printf "%s  \xf0\x9f\x8f\xa0 %s  context:%s%%/%s" "$display_dir" "$base_url" "$used_int" "$ctx_size_k"
   fi
   exit 0
 fi
